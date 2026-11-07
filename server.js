@@ -2,6 +2,9 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
+const missing = ['PUBLIC_URL', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'MS_TENANT', 'MASTER_SECRET', 'ADMIN_EMAILS'].filter((k) => !process.env[k]);
+if (missing.length) console.error('\n*** Missing settings: ' + missing.join(', ') + '. Sign-in will not work until they are set. ***\n');
+
 // How many reverse proxies sit in front of this app (Caddy/nginx/Cloudflare tunnel = 1).
 // Needed so the IP allowlist sees the student's real IP, not the proxy's.
 const tp = process.env.TRUST_PROXY ?? '1';

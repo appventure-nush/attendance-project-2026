@@ -1,5 +1,8 @@
 const { crypto, setCookie, BASE } = require('../_lib');
 module.exports = (req, res) => {
+  const missing = ['MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'PUBLIC_URL'].filter((k) => !process.env[k]);
+  if (missing.length) return res.status(500).type('text').send(
+    'Sign-in is not set up yet. The server is missing: ' + missing.join(', ') + '.\nWhoever runs the server needs to set these environment variables.');
   const state = crypto.randomBytes(16).toString('hex');
   const ret = String(req.query.return || '/');
   setCookie(res, 'oas', state + '|' + (ret.startsWith('/') && !ret.startsWith('//') ? ret : '/'), 600);
