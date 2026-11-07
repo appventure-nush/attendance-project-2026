@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - attendance-data:/app/data   # keeps attendance logs across restarts and updates
+      - attendance-data:/app/data
 
 volumes:
   attendance-data:

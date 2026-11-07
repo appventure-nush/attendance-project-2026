@@ -12,7 +12,7 @@ document.addEventListener('contextmenu',e=>e.preventDefault());
 const esc=(x)=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hdr=(me)=>`<div class="card row"><div class="av">${esc(me.name.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase())}</div><div><div class="name">${esc(me.name)}</div><div class="sub">${esc(me.email)}</div></div></div>`;
 const post=(d)=>fetch('/api/checkin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...d,pasteAttempts,hidden})}).then(async r=>({s:r.status,...await r.json()}));
-const MSG={network:'Laptop check-in only works on the school network. Connect to the school Wi-Fi.',wrong:'That code is wrong or has expired. Check the screen.',expired:'That QR code expired. Scan the one on screen now.',slow:'Too many attempts. Wait a minute.',signin:'Please sign in again.'};
+const MSG={network:'Laptop check-in only works on the school network. Connect to the school Wi-Fi.',wrong:'Those words are wrong or have changed. Type the words on the screen now.',expired:'That QR code expired. Scan the one on screen now.',slow:'Too many attempts. Wait a minute.',signin:'Please sign in again.'};
 
 function done(me,r){stopCam();const t=new Date(r.ts).toLocaleTimeString();
  $(hdr(me)+`<div class="card center"><svg class="tick" viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><path d="M38 62l16 16 30-34"/></svg><h1>${r.already?'Already checked in':'You’re checked in'}</h1><p class="sub">${t}</p></div>`)}
@@ -20,27 +20,25 @@ function done(me,r){stopCam();const t=new Date(r.ts).toLocaleTimeString();
 function stopCam(){scanning=false;stream&&stream.getTracks().forEach(t=>t.stop())}
 
 async function scanView(me,note){
- $(hdr(me)+`<div class="card"><h1>Scan the screen</h1><p class="sub">${note||'Point your camera at the QR code on the projector.'}</p><div class="cam"><video id="v" playsinline muted autoplay></video><div class="aim"></div></div><div class="err" id="e"></div><button class="btn ghost" id="sw">Type the 2-letter code instead</button></div>`);
+ $(hdr(me)+`<div class="card"><h1>Scan the screen</h1><p class="sub">${note||'Point your camera at the QR code on the projector.'}</p><div class="cam"><video id="v" playsinline muted autoplay></video><div class="aim"></div></div><div class="err" id="e"></div><button class="btn ghost" id="sw">Type the 3 words instead</button></div>`);
  const e=document.getElementById('e'),say=(m)=>{e.textContent=m};
  document.getElementById('sw').onclick=()=>{stopCam();codeView(me)};
- if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return say('This browser cannot open the camera. Type the code instead.');
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return say('This browser cannot open the camera. Type the words instead.');
  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}})}
  catch(err){try{stream=await navigator.mediaDevices.getUserMedia({video:true})}
-  catch{return say('Camera blocked. Allow camera access in your browser settings, or type the code.')}}
+  catch{return say('Camera blocked. Allow camera access in your browser settings, or type the words.')}}
  const track=stream.getVideoTracks()[0];
  try{await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch{}
  const v=document.getElementById('v');v.srcObject=stream;try{await v.play()}catch{}
  scanning=true;
- // ZXing (bundled on this server) decodes on every phone, so all phones behave the same.
  if(!window.ZXingWASM){const ok=await new Promise(r=>{const s=document.createElement('script');s.src='/vendor/zxing-reader.js';s.onload=()=>r(true);s.onerror=()=>r(false);document.head.appendChild(s)});
-  if(!ok){stopCam();return say('The scanner failed to load. Type the code instead.')}}
+  if(!ok){stopCam();return say('The scanner failed to load. Type the words instead.')}}
  try{await ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'/vendor/zxing_reader.wasm':pre+p},fireImmediately:true})}
- catch{stopCam();return say('The scanner failed to load. Type the code instead.')}
+ catch{stopCam();return say('The scanner failed to load. Type the words instead.')}
  const cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
  let lastTxt='',lastAt=0,sending=false,frame=0;
  const tokenFrom=(txt)=>{try{return new URL(txt).searchParams.get('t')}catch{const m=String(txt).match(/[?&]t=([\w.]+)/);return m&&m[1]}};
  async function decode(){
-  // Alternate between the whole frame and the centre at full resolution (acts like zoom for a far-away screen).
   const W=v.videoWidth,H=v.videoHeight;let sx=0,sy=0,sw=W,sh=H;
   if(frame++%2){const side=Math.round(Math.min(W,H)*0.6);sx=(W-side)>>1;sy=(H-side)>>1;sw=sh=side}
   const k=Math.min(1,1280/Math.max(sw,sh));cv.width=Math.round(sw*k);cv.height=Math.round(sh*k);
@@ -52,7 +50,7 @@ async function scanView(me,note){
   if(!sending&&v.readyState>=2&&v.videoWidth){
    let txt=null;try{txt=await decode()}catch{}
    const t=txt&&tokenFrom(txt);
-   if(t&&!(t===lastTxt&&Date.now()-lastAt<5000)){ // never resend the same code within 5s
+   if(t&&!(t===lastTxt&&Date.now()-lastAt<5000)){
     lastTxt=t;lastAt=Date.now();sending=true;say('Checking in…');
     try{const r=await post({token:t});if(r.ok){navigator.vibrate&&navigator.vibrate(60);return done(me,r)}
      say(MSG[r.reason]||'Try again.');if(r.reason==='slow'){stopCam();return}}
@@ -64,16 +62,28 @@ async function scanView(me,note){
 }
 
 function codeView(me){
- $(hdr(me)+`<div class="card center"><h1>Enter the code</h1><p class="sub">Type the 2 letters shown on the screen.</p><div class="otp"><input id="a" maxlength="1" autocomplete="off" autocapitalize="characters" inputmode="text"><input id="b" maxlength="1" autocomplete="off" autocapitalize="characters"></div><div class="err" id="e"></div><button class="btn" id="go">Check in</button>${mobile?'<button class="btn ghost" id="sw">Scan QR instead</button>':''}</div>`);
- const a=document.getElementById('a'),b=document.getElementById('b'),e=document.getElementById('e');a.focus();
- [a,b].forEach((el,i)=>{
-  ['paste','drop','copy','cut'].forEach(ev=>el.addEventListener(ev,x=>{x.preventDefault();pasteAttempts++;e.textContent='Pasting is disabled. Type the letters.'}));
-  el.addEventListener('beforeinput',x=>{if(/paste|drop|history/.test(x.inputType)){x.preventDefault();pasteAttempts++}});
-  el.addEventListener('input',()=>{el.value=el.value.replace(/[^a-z]/gi,'').toUpperCase();if(el.value&&i==0)b.focus();if(a.value&&b.value)go()});
-  el.addEventListener('keydown',x=>{if(x.key==='Backspace'&&!el.value&&i==1)a.focus()})});
- async function go(){const r=await post({letters:a.value+b.value});if(r.ok)return done(me,r);
-  e.textContent=MSG[r.reason]||'Try again.';a.value=b.value='';a.focus()}
- document.getElementById('go').onclick=go;
+ $(hdr(me)+`<div class="card center"><h1>Type the 3 words</h1><p class="sub">Type the 3 words shown on the screen, in order.</p><form class="words" id="f" autocomplete="off">${[1,2,3].map(i=>`<input id="w${i}" aria-label="Word ${i}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="12" enterkeyhint="${i<3?'next':'go'}">`).join('')}</form><div class="err" id="e"></div><button class="btn" id="go">Check in</button>${mobile?'<button class="btn ghost" id="sw">Scan QR instead</button>':''}</div>`);
+ const ins=[1,2,3].map(i=>document.getElementById('w'+i)),e=document.getElementById('e'),go=document.getElementById('go');
+ let keys=0,t0=0;ins[0].focus();
+ ins.forEach((el,i)=>{
+  ['paste','drop','copy','cut'].forEach(ev=>el.addEventListener(ev,x=>{x.preventDefault();pasteAttempts++;e.textContent='Pasting is disabled. Type the words.'}));
+  el.addEventListener('beforeinput',x=>{if(/paste|drop|yank/i.test(x.inputType)){x.preventDefault();pasteAttempts++}});
+  el.addEventListener('keydown',x=>{
+   if(x.key&&x.key.length===1){keys++;if(!t0)t0=Date.now()}
+   if(x.key===' '||x.key==='Enter'){x.preventDefault();if(x.key==='Enter'&&i===2)return submit();if(el.value&&i<2)ins[i+1].focus();else if(x.key==='Enter')submit()}
+   if(x.key==='Backspace'&&!el.value&&i>0){x.preventDefault();ins[i-1].focus()}});
+  el.addEventListener('input',()=>{const v=el.value.toLowerCase().replace(/[^a-z ]/g,'');
+   if(v.includes(' ')&&i<2){el.value=v.replace(/ /g,'');ins[i+1].focus()}else el.value=v.replace(/ /g,'')})});
+ let busy=false;
+ async function submit(){
+  if(busy)return;const val=ins.map(x=>x.value.trim());
+  if(val.some(v=>!v)){e.textContent='Type all 3 words.';ins[val.findIndex(v=>!v)].focus();return}
+  busy=true;go.disabled=true;e.textContent='';
+  const chars=val.join('').length,typing=mobile?{}:{keys,chars,ms:t0?Date.now()-t0:0};
+  try{const r=await post({words:val.join(' '),...typing});if(r.ok)return done(me,r);
+   e.textContent=MSG[r.reason]||'Try again.'}catch{e.textContent='No connection. Check your internet and try again.'}
+  ins.forEach(x=>x.value='');keys=0;t0=0;ins[0].focus();busy=false;go.disabled=false}
+ go.onclick=submit;document.getElementById('f').onsubmit=x=>{x.preventDefault();submit()};
  const sw=document.getElementById('sw');if(sw)sw.onclick=()=>scanView(me);
 }
 

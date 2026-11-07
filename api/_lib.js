@@ -1,11 +1,11 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const WORDS = require('./words');
+
 const SECRET = () => process.env.MASTER_SECRET || 'dev-secret-change-me';
 const hmac = (s) => crypto.createHmac('sha256', SECRET()).update(s).digest();
 
-// ---- Storage ----
-// Default: a JSON file on disk (no database needed). Mount a persistent volume at DATA_DIR
-// so attendance survives redeploys. If REDIS_URL is set, Redis is used instead.
-const fs = require('fs'), path = require('path');
 let r;
 if (process.env.REDIS_URL) {
   const { createClient } = require('redis');
@@ -17,7 +17,7 @@ if (process.env.REDIS_URL) {
 } else {
   const DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
   const FILE = path.join(DIR, 'store.json');
-  let mem = {}; // key -> { v: string | {field: string}, x: expiry ms or 0 }
+  let mem = {};
   fs.mkdirSync(DIR, { recursive: true });
   try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); }
   catch (e) { if (e.code !== 'ENOENT') { console.error('Could not read ' + FILE + ': ' + e.message); process.exit(1); } }
@@ -41,34 +41,34 @@ if (process.env.REDIS_URL) {
       case 'HGET': { const e = live(a[0]); return e && Object.hasOwn(e.v, a[1]) ? e.v[a[1]] : null; }
       case 'HSET': { const e = live(a[0]) || (mem[a[0]] = { v: {}, x: 0 }); let n = 0;
         for (let i = 1; i < a.length; i += 2) { if (!Object.hasOwn(e.v, a[i])) n++; e.v[a[i]] = a[i + 1]; } save(); return n; }
+      case 'HDEL': { const e = live(a[0]); if (!e) return 0; let n = 0;
+        for (const f of a.slice(1)) if (Object.hasOwn(e.v, f)) { delete e.v[f]; n++; } save(); return n; }
       case 'HGETALL': { const e = live(a[0]); return e ? Object.entries(e.v).flat() : []; }
       default: throw new Error('Unsupported storage command ' + cmd);
     }
   };
 }
 
-// Public base URL, e.g. https://attendance.myschool.edu.sg (no trailing slash)
-const BASE = () => (process.env.PUBLIC_URL || 'http://localhost:3000').replace(/\/$/, '');
+const BASE = () => (process.env.PUBLIC_URL || 'http://localhost:3000').trim().replace(/^["']|["']$/g, '').replace(/\/$/, '');
+const SITE = () => BASE().replace(/^https?:\/\//, '');
 
-// ---- Rotating codes (TOTP style) ----
-const W_QR = 8000, W_LET = 4000;
-// Kept short on purpose: a shorter URL means a smaller, coarser QR that scans from further away.
-// The server tries the current and previous 8s window, so the window number isn't included.
+const W_QR = 8000;
+const W_WORDS = Math.max(2, Math.min(60, +process.env.WORDS_SECONDS || 4)) * 1000;
+const winQ = (now = Date.now()) => Math.floor(now / W_QR);
+const winW = (now = Date.now()) => Math.floor(now / W_WORDS);
 function qrToken(w) { return hmac('q' + w).toString('hex').slice(0, 10); }
-function letters(w) {
-  const b = hmac('l' + w); const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I/O
-  return A[b[0] % A.length] + A[b[1] % A.length];
+function words(w) {
+  const b = hmac('w' + w), out = [];
+  for (let i = 0; out.length < 3; i++) {
+    const word = WORDS[(b.readUInt16BE((i * 2) % 30) + Math.floor(i / 15)) % WORDS.length];
+    if (!out.includes(word)) out.push(word);
+  }
+  return out;
 }
-function validToken(t, now = Date.now()) {
-  const w = Math.floor(now / W_QR);
-  return [w, w - 1].some((x) => qrToken(x) === String(t));
-}
-function validLetters(s, now = Date.now()) {
-  const w = Math.floor(now / W_LET);
-  return [w, w - 1].some((x) => letters(x) === String(s).toUpperCase());
-}
+const norm = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+function validToken(t, now = Date.now()) { const w = winQ(now); return [w, w - 1].some((x) => qrToken(x) === String(t)); }
+function validWords(s, now = Date.now()) { const w = winW(now), g = norm(s); return [w, w - 1].some((x) => words(x).join(' ') === g); }
 
-// ---- Cookies / sessions ----
 function parseCookies(req) {
   return Object.fromEntries((req.headers.cookie || '').split(';').filter(Boolean).map((c) => {
     const i = c.indexOf('='); return [c.slice(0, i).trim(), decodeURIComponent(c.slice(i + 1))];
@@ -93,12 +93,10 @@ function unsign(s) {
 const getUser = (req) => unsign(parseCookies(req).sess);
 const isAdmin = (u) => !!u && (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim()).includes(u.e);
 
-// ---- IP allowlist (exact, or IPv4 CIDR) ----
-// req.ip respects TRUST_PROXY (see server.js); strip IPv4-mapped IPv6 prefix
 const clientIp = (req) => String(req.ip || '').replace(/^::ffff:/, '');
 const ip2n = (ip) => ip.split('.').reduce((a, o) => (a << 8) + (+o), 0) >>> 0;
 function ipAllowed(ip, list) {
-  if (!list.length) return true; // empty list = no restriction (prototype default)
+  if (!list.length) return true;
   return list.some((e) => {
     if (e === ip) return true;
     const m = e.match(/^(\d+\.\d+\.\d+\.\d+)\/(\d+)$/);
@@ -112,6 +110,27 @@ const dayKey = (d = new Date()) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: process.env.TZ_NAME || 'Asia/Singapore' }).format(d);
 const getJson = async (k, def) => { const v = await r('GET', k); return v ? JSON.parse(v) : def; };
 const body = async (req) => (typeof req.body === 'object' && req.body) || JSON.parse(req.body || '{}');
+const hashToObj = (a) => { const o = {}; for (let i = 0; i < (a || []).length; i += 2) o[a[i]] = a[i + 1]; return o; };
+const fallbackName = (email) => email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-module.exports = { r, BASE, qrToken, letters, validToken, validLetters, parseCookies, setCookie, sign, unsign,
-  getUser, isAdmin, clientIp, ipAllowed, dayKey, getJson, body, W_QR, W_LET, crypto };
+async function roster(day) {
+  const att = hashToObj(await r('HGETALL', 'att:' + day));
+  const names = hashToObj(await r('HGETALL', 'names'));
+  const expected = await getJson('cfg:students', []);
+  const list = [], seen = new Set();
+  for (const email of expected) {
+    seen.add(email);
+    const rec = att[email] ? JSON.parse(att[email]) : null;
+    list.push({ email, name: (rec && rec.name) || names[email] || fallbackName(email), expected: true, present: !!rec, ...(rec ? { ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] } : {}) });
+  }
+  for (const [email, v] of Object.entries(att)) {
+    if (seen.has(email)) continue;
+    const rec = JSON.parse(v);
+    list.push({ email, name: rec.name || names[email] || fallbackName(email), expected: false, present: true, ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] });
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  return list;
+}
+
+module.exports = { r, BASE, SITE, W_QR, W_WORDS, winQ, winW, qrToken, words, validToken, validWords, parseCookies, setCookie, sign, unsign,
+  getUser, isAdmin, clientIp, ipAllowed, dayKey, getJson, body, roster, fallbackName, crypto };

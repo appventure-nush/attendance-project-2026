@@ -1,24 +1,116 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Attendance Admin</title><link rel="stylesheet" href="/style.css"><style>.wrap{max-width:900px}body{-webkit-user-select:text;user-select:text}</style></head><body>
+<title>Attendance Admin</title><link rel="stylesheet" href="/style.css">
+<style>
+body{-webkit-user-select:text;user-select:text}
+.wrap{max-width:1040px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.top h1{margin:0;flex:1;min-width:200px}
+.daynav{display:flex;align-items:center;gap:6px}
+.daynav input{font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.icon{border:1px solid var(--line);background:#fff;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:18px;line-height:1;color:var(--ink)}
+.links{display:flex;gap:8px;flex-wrap:wrap}
+.lnk{display:inline-block;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--blue);text-decoration:none;font-weight:600;font-size:14px}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.stat{border:0;border-radius:10px;padding:10px 14px;background:var(--bg);font:inherit;text-align:left;cursor:pointer;color:var(--ink);min-width:120px}
+.stat b{display:block;font-size:24px;line-height:1.1}
+.stat span{font-size:13px;color:var(--sub)}
+.stat.on{outline:2px solid var(--blue)}
+.stat.abs b{color:var(--bad)}.stat.pre b{color:var(--ok)}
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 6px}
+.tools input{flex:1;min-width:180px;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12px;color:var(--sub);font-weight:600;text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.yes{background:#dff6dd;color:#0e700e}.pill.no{background:#fde7e9;color:#b10e1c}
+.extra{font-size:12px;color:var(--sub)}
+.flag{color:var(--bad);font-size:12px}
+.act{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.act.del{color:var(--bad)}.act.mark{color:var(--blue)}
+.act.confirm{background:var(--bad);color:#fff;border-color:var(--bad)}
+.empty{color:var(--sub);text-align:center;padding:24px 6px}
+.note{font-size:13px;color:var(--sub);margin:6px 0 8px}
+.saved{color:var(--ok);font-size:14px;margin-left:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}.hide-sm{display:none}}
+</style></head><body>
 <main class="wrap" id="app"><div class="card">Loading…</div></main>
 <script>
-const app=document.getElementById('app');let day='';
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const app=document.getElementById('app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const how={qr:'QR scan',words:'Typed words',code:'Typed code',manual:'Marked by admin'};
+let day='',data=null,filter='all',q='',timer=null;
+
+const shift=(d,n)=>{const t=new Date(d+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
+const time=ts=>ts?new Date(ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'}):'';
+
 async function load(){
- const r=await fetch('/api/admin'+(day?'?date='+day:''));
- if(r.status===401)return app.innerHTML='<div class="card center"><h1>Admin only</h1><a class="btn" href="/api/auth/login?return=/admin">Sign in with Microsoft</a></div>';
- const d=await r.json();day=d.day;
- app.innerHTML=`<div class="card row"><h1 style="margin:0;flex:1">Attendance</h1><input type="date" id="dt" value="${d.day}"><a class="btn ghost" style="width:auto" href="/master">Open display</a></div>
- <div class="card"><b>Present (${d.logs.length})</b><table><tr><th>Time</th><th>Name</th><th>Email</th><th>How</th><th>IP</th></tr>${d.logs.map(l=>`<tr><td>${new Date(l.ts).toLocaleTimeString()}</td><td>${esc(l.name)}</td><td>${esc(l.email)}<div class="flag">${l.flags.map(esc).join('<br>')}</div></td><td>${l.method}</td><td>${esc(l.ip)}</td></tr>`).join('')}</table></div>
- <div class="card"><b>Absent (${d.absent.length})</b><p class="sub">${d.absent.map(esc).join(', ')||'None'}</p></div>
- <div class="card"><b>Expected students</b><p class="sub">One school email per line.</p><textarea id="st">${esc(d.students.join('\n'))}</textarea></div>
- <div class="card"><b>Approved IP addresses</b><p class="sub">Laptop check-ins (typed code) must come from one of these. Phone QR scans are not IP-checked. One per line: single IPs or IPv4 ranges like 203.0.113.0/24. Empty means any network is allowed. You are on ${esc(d.myIp)}.</p><textarea id="ip">${esc(d.ips.join('\n'))}</textarea>
- <button class="btn ghost" id="mine">Add my current IP</button></div>
- <button class="btn" id="save">Save lists</button>`;
- document.getElementById('dt').onchange=e=>{day=e.target.value;load()};
- document.getElementById('mine').onclick=()=>{const t=document.getElementById('ip');t.value=(t.value+'\n'+d.myIp).trim()};
- document.getElementById('save').onclick=async()=>{const L=id=>document.getElementById(id).value.split('\n');
-  await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({students:L('st'),ips:L('ip')})});load()};
+ const r=await fetch('/api/admin'+(day?'?date='+day:''),{cache:'no-store'});
+ if(r.status===401){app.innerHTML='<div class="card center"><h1>Admins only</h1><p class="sub">Sign in with an admin school account.</p><a class="btn" href="/api/auth/login?return=/admin">Sign in with Microsoft</a></div>';return}
+ data=await r.json();day=data.day;
+ if(!document.getElementById('roster'))shell();
+ render();
+ clearTimeout(timer);if(day===data.today)timer=setTimeout(load,10000);
+}
+
+function shell(){
+ app.innerHTML=`
+ <div class="card top"><h1>Attendance</h1>
+  <div class="daynav"><button class="icon" id="prev" aria-label="Previous day">‹</button><input type="date" id="dt"><button class="icon" id="next" aria-label="Next day">›</button></div>
+  <div class="links"><a class="lnk" href="/master" target="_blank">Open projector screen</a><a class="lnk" id="csv" href="#">Download CSV</a></div></div>
+ <div class="card">
+  <div class="stats" id="stats"></div>
+  <div class="tools"><input type="search" id="q" placeholder="Search name or email"></div>
+  <div id="roster"></div>
+ </div>
+ <div class="grid2">
+  <div class="card"><b>Expected students</b><p class="note">One school email per line. Anyone here who hasn't checked in is marked absent.</p><textarea id="st"></textarea></div>
+  <div class="card"><b>Approved IP addresses</b><p class="note">Laptop check-ins (typed words) must come from one of these. Phone QR scans aren't IP-checked. Single IPs or ranges like 203.0.113.0/24. Leave empty to allow any network. You're on <b id="myip"></b>.</p><textarea id="ip"></textarea><button class="btn ghost" id="mine">Add my current IP</button></div>
+ </div>
+ <div><button class="btn" id="save" style="width:auto;padding:12px 22px">Save lists</button><span class="saved" id="saved"></span></div>`;
+ const g=id=>document.getElementById(id);
+ g('st').value=data.students.join('\n');g('ip').value=data.ips.join('\n');g('myip').textContent=data.myIp;
+ g('dt').onchange=e=>{if(e.target.value){day=e.target.value;load()}};
+ g('prev').onclick=()=>{day=shift(day,-1);load()};
+ g('next').onclick=()=>{day=shift(day,1);load()};
+ g('q').oninput=e=>{q=e.target.value.toLowerCase();render()};
+ g('mine').onclick=()=>{const t=g('ip');if(!t.value.split('\n').includes(data.myIp))t.value=(t.value.trim()+'\n'+data.myIp).trim()};
+ g('save').onclick=async()=>{const L=id=>g(id).value.split('\n');
+  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({students:L('st'),ips:L('ip')})});
+  g('saved').textContent=r.ok?'Saved':'Could not save. Try again.';setTimeout(()=>g('saved').textContent='',3000);
+  const d=await (await fetch('/api/admin?date='+day,{cache:'no-store'})).json();data=d;g('st').value=d.students.join('\n');g('ip').value=d.ips.join('\n');render()};
+ g('roster').addEventListener('click',onAction);
+}
+
+function render(){
+ const g=id=>document.getElementById(id);
+ g('dt').value=day;g('next').disabled=day>=data.today;
+ g('csv').href='/api/admin?format=csv&date='+day;
+ const R=data.roster,exp=R.filter(s=>s.expected);
+ const pres=exp.filter(s=>s.present).length,abs=exp.length-pres,extra=R.filter(s=>!s.expected).length;
+ const st=(k,n,label,cls)=>`<button class="stat ${cls||''}${filter===k?' on':''}" data-f="${k}"><b>${n}</b><span>${label}</span></button>`;
+ g('stats').innerHTML=st('all',R.length,'Everyone')+st('absent',abs,'Absent','abs')+st('present',pres+extra,'Checked in','pre')+(extra?st('extra',extra,'Not on expected list'):'');
+ g('stats').querySelectorAll('.stat').forEach(b=>b.onclick=()=>{filter=b.dataset.f;render()});
+ let rows=R.filter(s=>filter==='all'||(filter==='absent'&&!s.present)||(filter==='present'&&s.present)||(filter==='extra'&&!s.expected));
+ if(q)rows=rows.filter(s=>(s.name+' '+s.email).toLowerCase().includes(q));
+ rows.sort((a,b)=>(a.present-b.present)||(a.present?a.ts-b.ts:a.name.localeCompare(b.name)));
+ if(!R.length){g('roster').innerHTML='<p class="empty">No students yet. Add the expected students below, then save.</p>';return}
+ if(!rows.length){g('roster').innerHTML=`<p class="empty">${filter==='absent'&&!q?'Everyone expected is here.':'No one matches.'}</p>`;return}
+ g('roster').innerHTML=`<table><thead><tr><th>Status</th><th>Name</th><th class="hide-sm">Email</th><th>Time</th><th class="hide-sm">How</th><th></th></tr></thead><tbody>${rows.map(s=>`
+  <tr><td><span class="pill ${s.present?'yes':'no'}">${s.present?'Present':'Absent'}</span></td>
+  <td>${esc(s.name)}${s.expected?'':'<div class="extra">Not on expected list</div>'}${(s.flags||[]).map(f=>`<div class="flag">${esc(f)}</div>`).join('')}</td>
+  <td class="hide-sm">${esc(s.email)}</td><td>${time(s.ts)}</td><td class="hide-sm">${esc(how[s.method]||s.method||'')}${s.ip?`<div class="extra">${esc(s.ip)}</div>`:''}</td>
+  <td>${s.present?`<button class="act del" data-a="delete" data-e="${esc(s.email)}">Delete</button>`:`<button class="act mark" data-a="mark" data-e="${esc(s.email)}">Mark present</button>`}</td></tr>`).join('')}</tbody></table>`;
+}
+
+async function onAction(e){
+ const b=e.target.closest('.act');if(!b)return;
+ if(b.dataset.a==='delete'&&!b.classList.contains('confirm')){
+  b.classList.add('confirm');b.textContent='Confirm delete';
+  setTimeout(()=>{if(b.isConnected){b.classList.remove('confirm');b.textContent='Delete'}},4000);return}
+ b.disabled=true;
+ await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:b.dataset.a,email:b.dataset.e,date:day})});
+ load();
 }
 load();
 </script></body></html>

@@ -1,36 +1,166 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Attendance Display</title><link rel="stylesheet" href="/style.css">
-<style>body{background:#fff;-webkit-user-select:none}.m{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2vh;height:100vh;text-align:center}
-#qr{width:min(58vh,80vw)}#qr svg{width:100%;height:auto;display:block;shape-rendering:crispEdges}
-h1{font-size:4vh;margin:0}.i{font-size:2.6vh;color:var(--sub);margin:0}
-.lt{position:relative;width:15vh;height:15vh}.lt svg{position:absolute;inset:0;transform:rotate(-90deg)}
-.lt b{position:absolute;inset:0;display:grid;place-items:center;font-size:7vh;letter-spacing:.05em;font-weight:600}
-#toast{position:fixed;top:3vh;right:3vh;background:var(--ok);color:#fff;font-size:3vh;padding:2vh 3vh;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);transform:translateY(-200%);transition:transform .35s}
-#toast.on{transform:none}#cnt{position:fixed;bottom:2vh;right:3vh;color:var(--sub);font-size:2vh}</style></head><body>
-<div class="m" id="m"><h1>Robotics Club attendance</h1>
-<p class="i">Scan with your phone, or visit this site on a laptop and type the letters below.</p>
-<div id="qr"></div>
-<div class="lt"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="#e1dfdd" stroke-width="2.5"/><circle id="ring" cx="18" cy="18" r="16" fill="none" stroke="#0f6cbd" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="100.5" /></svg><b id="L">--</b></div></div>
-<div id="toast"></div><div id="cnt"></div>
+<title>Attendance Display</title>
+<style>
+:root{--ink:#201f1e;--sub:#605e5c;--blue:#0f6cbd;--line:#e1dfdd;--ok:#0e700e;--okbg:#dff6dd;--no:#b10e1c;--nobg:#fde7e9}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#fff;color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;-webkit-user-select:none;user-select:none;overflow:hidden}
+body.idle{cursor:none}
+.page{height:100vh;display:grid;grid-template-columns:min(44vw,74vh) 1fr;grid-template-rows:auto 1fr;column-gap:4vw;padding:4vh 4vw 3vh}
+h1{grid-column:1/-1;margin:0 0 3vh;font-size:6.2vh;font-weight:700;letter-spacing:-.01em;line-height:1.05}
+.left{display:flex;flex-direction:column;min-height:0}
+.label{font-size:3.2vh;font-weight:600;margin:0}
+#qr{width:var(--qr);height:var(--qr);margin:2.2vh 0 2.6vh}
+#qr svg{width:100%;height:100%;display:block;shape-rendering:crispEdges}
+.visit{font-size:2.9vh;line-height:1.3;margin:0 0 1.6vh;color:var(--ink);text-wrap:balance}
+.visit b{font-weight:600}
+.code{display:flex;align-items:center;gap:2.4vh;min-width:0}
+.ring{width:7vh;height:7vh;flex:none}
+.ring circle{fill:none;stroke-width:3.2}
+.ring .track{stroke:var(--line)}
+.ring .left{stroke:var(--blue);stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%}
+.ring.low .left{stroke:var(--no)}
+.words{display:flex;flex-wrap:nowrap;white-space:nowrap;gap:0 .45em;font-size:7.4vh;min-width:0;font-weight:700;color:var(--blue);line-height:1.1;letter-spacing:.01em}
+.right{min-height:0;display:flex;flex-direction:column;border-left:2px solid var(--line);padding-left:4vw}
+.rhead{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 2vh}
+.rhead h2{margin:0;font-size:3.2vh;font-weight:600}
+.count{font-size:3.2vh;color:var(--sub)}
+.count b{color:var(--ok);font-weight:700}
+#list{flex:1;min-height:0;display:grid;grid-auto-flow:column;gap:1vh 1.4vw;align-content:start;list-style:none;margin:0;padding:0}
+#list li{display:flex;align-items:center;gap:.6em;min-width:0;border-radius:.45em;padding:0 .6em;font-weight:600}
+#list li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#list li svg{width:1em;height:1em;flex:none}
+#list li.yes{background:var(--okbg);color:var(--ok)}
+#list li.no{background:var(--nobg);color:var(--no)}
+#list li.fresh{animation:pop 1.2s ease-out}
+@keyframes pop{0%{box-shadow:0 0 0 0 rgba(14,112,14,.55)}100%{box-shadow:0 0 0 1.4vh rgba(14,112,14,0)}}
+.empty{color:var(--sub);font-size:2.6vh;line-height:1.4}
+#toast{position:fixed;left:50%;bottom:4vh;transform:translate(-50%,calc(100% + 6vh));visibility:hidden;background:var(--ok);color:#fff;font-size:3.2vh;font-weight:600;padding:1.8vh 3vh;border-radius:1.4vh;box-shadow:0 1vh 4vh rgba(0,0,0,.25);transition:transform .35s ease;white-space:nowrap}
+#toast.on{transform:translate(-50%,0);visibility:visible}
+#stale{position:fixed;right:2vw;bottom:2vh;font-size:2vh;color:var(--no);display:none}
+.gate{grid-column:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:2vh;font-size:2.6vh}
+.gate a{background:var(--blue);color:#fff;text-decoration:none;font-weight:600;padding:1.6vh 3vh;border-radius:1vh}
+@media(prefers-reduced-motion:reduce){#list li.fresh{animation:none}#toast{transition:none}}
+</style></head><body>
+<div class="page" id="page">
+ <h1>Robotics Club Attendance</h1>
+ <section class="left">
+  <p class="label">Scan QR code with your phone</p>
+  <div id="qr"></div>
+  <p class="visit">Or visit <b id="site"></b> and key in these 3 words:</p>
+  <div class="code">
+   <svg class="ring" id="ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="track" cx="18" cy="18" r="15.5"/><circle class="left" id="arc" cx="18" cy="18" r="15.5"/></svg>
+   <div class="words" id="words"></div>
+  </div>
+ </section>
+ <section class="right">
+  <div class="rhead"><h2>Students</h2><div class="count" id="count"></div></div>
+  <ul id="list"></ul>
+ </section>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="stale">Reconnecting…</div>
 <script src="/vendor/qrcode.js"></script>
 <script>
-let since=Date.now()-1000,lastUrl='',off=0,letEnd=0,letLen=4000;
-function draw(url){const q=qrcode(0,'M');q.addData(url);q.make();document.getElementById('qr').innerHTML=q.createSvgTag({cellSize:4,margin:4,scalable:true})}
-const toast=document.getElementById('toast');let q=[],showing=false;
-function pump(){if(showing||!q.length)return;showing=true;const e=q.shift();
- toast.textContent=`${e.name} signed in at ${new Date(e.ts).toLocaleTimeString()}`;toast.classList.add('on');
- setTimeout(()=>{toast.classList.remove('on');setTimeout(()=>{showing=false;pump()},400)},4000)}
-async function tick(){
- const r=await fetch('/api/master?since='+since);
- if(r.status===401){document.getElementById('m').innerHTML='<h1>Admin sign-in required</h1><a class="btn" style="width:300px" href="/api/auth/login?return=/master">Sign in with Microsoft</a>';return}
- const d=await r.json();off=d.now-Date.now();letEnd=d.now+d.letMsLeft;
- if(d.url!==lastUrl){lastUrl=d.url;draw(d.url)}
- document.getElementById('L').textContent=d.letters;
- d.events.forEach(e=>{since=Math.max(since,e.ts);q.push(e)});pump();
- document.getElementById('cnt').textContent=d.count+' checked in today';
- setTimeout(tick,Math.min(1000,Math.max(150,d.letMsLeft+30)));
+const $=id=>document.getElementById(id);
+const C=2*Math.PI*15.5;
+$('arc').style.strokeDasharray=C;
+let off=0,qP=8000,wP=4000,qSlots={},wSlots={},qShown=null,wShown=null,lastOk=0,known=null;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now=()=>Date.now()+off;
+
+function sizeQr(){
+ const left=document.querySelector('.left'),h=window.innerHeight;
+ const used=[...left.children].filter(el=>el.id!=='qr').reduce((a,el)=>a+el.getBoundingClientRect().height,0);
+ const avail=Math.max(120,Math.min(left.clientWidth,left.clientHeight-used-h*0.06));
+ document.documentElement.style.setProperty('--qr',avail+'px');
 }
-setInterval(()=>{const left=Math.max(0,letEnd-(Date.now()+off));document.getElementById('ring').style.strokeDashoffset=100.5*(1-left/letLen)},50);
-tick();
-document.addEventListener('click',()=>document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen());
+function drawQr(url){
+ const q=qrcode(0,'M');q.addData(url);q.make();
+ $('qr').innerHTML=q.createSvgTag({cellSize:4,margin:0,scalable:true});
+ sizeQr();
+}
+let gated=false;
+function fitWords(){
+ const el=$('words'),max=window.innerHeight*0.074;
+ el.style.fontSize=max+'px';
+ const avail=document.querySelector('.left').clientWidth-$('ring').getBoundingClientRect().width-window.innerHeight*0.024;
+ if(el.scrollWidth>avail)el.style.fontSize=(max*avail/el.scrollWidth*0.98)+'px';
+}
+function frame(){
+ if(gated)return;
+ const t=now(),qn=Math.floor(t/qP),wn=Math.floor(t/wP),left=wP-(t%wP);
+ if(qn!==qShown&&qSlots[qn]){qShown=qn;drawQr(qSlots[qn].url)}
+ if(wn!==wShown&&wSlots[wn]){wShown=wn;$('words').innerHTML=wSlots[wn].words.map(w=>`<span>${esc(w)}</span>`).join('');fitWords()}
+ $('arc').style.strokeDashoffset=C*(1-left/wP);
+ $('ring').classList.toggle('low',left<Math.min(1500,wP/3));
+ $('stale').style.display=Date.now()-lastOk>5000&&lastOk?'block':'none';
+ requestAnimationFrame(frame);
+}
+
+const icon={yes:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.5 8.2l2.3 2.3 4.7-5" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ no:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'};
+const meas=document.createElement('canvas').getContext('2d');
+function layoutList(names){
+ const list=$('list'),H=list.clientHeight,W=list.clientWidth,n=names.length;
+ meas.font='600 100px '+getComputedStyle(document.body).fontFamily;
+ const longest=Math.max(meas.measureText('Mmmmmmm').width,...names.map(x=>meas.measureText(x).width))/100;
+ let best={cols:1,rows:n,size:0,itemH:0};
+ for(let cols=1;cols<=5;cols++){
+  const rows=Math.ceil(Math.max(n,1)/cols),gap=window.innerHeight*0.01;
+  const itemH=(H-gap*(rows-1))/rows,colW=(W-(cols-1)*window.innerWidth*0.014)/cols;
+  const font=Math.min(itemH*0.55,colW/(longest+2.9),window.innerHeight*0.036);
+  if(font>best.size+0.5)best={cols,rows,size:font,itemH:Math.min(itemH,font*2.1)};
+ }
+ list.style.gridTemplateRows=`repeat(${best.rows},${best.itemH}px)`;
+ list.style.fontSize=best.size+'px';
+}
+let lastRoster=[];
+function renderRoster(roster){
+ lastRoster=roster;
+ const fresh=[];
+ if(known)for(const s of roster)if(s.present&&!known.has(s.email))fresh.push(s);
+ known=new Set(roster.filter(s=>s.present).map(s=>s.email));
+ const exp=roster.filter(s=>s.expected),here=exp.filter(s=>s.present).length;
+ $('count').innerHTML=exp.length?`<b>${here}</b> of ${exp.length} checked in`:`<b>${roster.length}</b> checked in`;
+ const list=$('list');
+ if(!roster.length){list.innerHTML='<li class="empty">Add the expected students in the admin panel to see them here.</li>';list.style.gridTemplateRows='';return}
+ list.innerHTML=roster.map(s=>`<li class="${s.present?'yes':'no'}${fresh.some(f=>f.email===s.email)?' fresh':''}">${s.present?icon.yes:icon.no}<span>${esc(s.name)}</span></li>`).join('');
+ layoutList(roster.map(s=>s.name));
+ fresh.sort((a,b)=>a.ts-b.ts).forEach(s=>toastQ.push(s));pump();
+}
+const toastQ=[];let toasting=false;
+function pump(){
+ if(toasting||!toastQ.length)return;toasting=true;const s=toastQ.shift();
+ $('toast').textContent=`${s.name} signed in at ${new Date(s.ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+ $('toast').classList.add('on');
+ setTimeout(()=>{$('toast').classList.remove('on');setTimeout(()=>{toasting=false;pump()},400)},3500);
+}
+
+async function poll(){
+ try{
+  const t0=Date.now(),r=await fetch('/api/master',{cache:'no-store'}),t1=Date.now();
+  if(r.status===401){
+   gated=true;
+   $('page').innerHTML='<h1>Robotics Club Attendance</h1><div class="gate"><p>Sign in with an admin account to show the attendance screen.</p><a href="/api/auth/login?return=/master">Sign in with Microsoft</a></div>';
+   return;
+  }
+  const d=await r.json();
+  if(t1-t0<1500)off=d.now-(t0+t1)/2;
+  qP=d.qr.period;wP=d.words.period;lastOk=Date.now();
+  $('site').textContent=d.site;
+  qSlots={[d.qr.cur.n]:d.qr.cur,[d.qr.next.n]:d.qr.next};
+  wSlots={[d.words.cur.n]:d.words.cur,[d.words.next.n]:d.words.next};
+  renderRoster(d.roster);
+ }catch{}
+ setTimeout(poll,Math.min(1000,wP/2));
+}
+
+let idle;
+addEventListener('mousemove',()=>{document.body.classList.remove('idle');clearTimeout(idle);idle=setTimeout(()=>document.body.classList.add('idle'),3000)});
+addEventListener('click',()=>{const el=document.documentElement;if(!document.fullscreenElement&&el.requestFullscreen)el.requestFullscreen().catch(()=>{})});
+addEventListener('resize',()=>{sizeQr();fitWords();if(lastRoster.length)layoutList(lastRoster.map(s=>s.name))});
+let lock=null;
+async function wake(){try{if('wakeLock' in navigator&&!lock){lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null})}}catch{}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake()});
+wake();poll();requestAnimationFrame(frame);
 </script></body></html>
