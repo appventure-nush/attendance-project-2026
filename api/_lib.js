@@ -91,7 +91,8 @@ function unsign(s) {
   try { const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return o.exp > Date.now() ? o : null; } catch { return null; }
 }
 const getUser = (req) => unsign(parseCookies(req).sess);
-const isAdmin = (u) => !!u && (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim()).includes(u.e);
+const owners = () => (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+const isAdmin = async (u) => !!u && (owners().includes(u.e) || (await getJson('cfg:exco', [])).includes(u.e));
 
 const clientIp = (req) => String(req.ip || '').replace(/^::ffff:/, '');
 const ip2n = (ip) => ip.split('.').reduce((a, o) => (a << 8) + (+o), 0) >>> 0;
@@ -142,4 +143,4 @@ async function roster(day) {
 }
 
 module.exports = { r, BASE, SITE, W_QR, W_WORDS, winQ, winW, qrToken, words, validToken, validWords, parseCookies, setCookie, sign, unsign,
-  getUser, isAdmin, clientIp, ipAllowed, dayKey, getJson, body, roster, fallbackName, yearOf, crypto };
+  getUser, isAdmin, owners, clientIp, ipAllowed, dayKey, getJson, body, roster, fallbackName, yearOf, crypto };

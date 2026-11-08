@@ -67,18 +67,20 @@ function shell(){
   <div class="card"><b>Expected students</b><p class="note">One school email per line. Anyone here who hasn't checked in is marked absent.</p><textarea id="st"></textarea></div>
   <div class="card"><b>Approved IP addresses</b><p class="note">Laptop check-ins (typed words) must come from one of these. Phone QR scans aren't IP-checked. Single IPs or ranges like 203.0.113.0/24. Leave empty to allow any network. You're on <b id="myip"></b>.</p><textarea id="ip"></textarea><button class="btn ghost" id="mine">Add my current IP</button></div>
  </div>
+ <div class="card"><b>Executive committee</b><p class="note">One school email per line. Committee members have admin rights: they can open the projector screen and this admin panel, and edit these lists.</p><textarea id="ex" style="min-height:110px"></textarea><p class="note" id="owners"></p></div>
  <div><button class="btn" id="save" style="width:auto;padding:12px 22px">Save lists</button><span class="saved" id="saved"></span></div>`;
  const g=id=>document.getElementById(id);
- g('st').value=data.students.join('\n');g('ip').value=data.ips.join('\n');g('myip').textContent=data.myIp;
+ g('st').value=data.students.join('\n');g('ip').value=data.ips.join('\n');g('ex').value=data.exco.join('\n');g('myip').textContent=data.myIp;
+ g('owners').innerHTML=data.owners.length?'Always admins (set on the server, can\'t be removed here): '+data.owners.map(esc).join(', '):'';
  g('dt').onchange=e=>{if(e.target.value){day=e.target.value;load()}};
  g('prev').onclick=()=>{day=shift(day,-1);load()};
  g('next').onclick=()=>{day=shift(day,1);load()};
  g('q').oninput=e=>{q=e.target.value.toLowerCase();render()};
  g('mine').onclick=()=>{const t=g('ip');if(!t.value.split('\n').includes(data.myIp))t.value=(t.value.trim()+'\n'+data.myIp).trim()};
  g('save').onclick=async()=>{const L=id=>g(id).value.split('\n');
-  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({students:L('st'),ips:L('ip')})});
+  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({students:L('st'),ips:L('ip'),exco:L('ex')})});
   g('saved').textContent=r.ok?'Saved':'Could not save. Try again.';setTimeout(()=>g('saved').textContent='',3000);
-  const d=await (await fetch('/api/admin?date='+day,{cache:'no-store'})).json();data=d;g('st').value=d.students.join('\n');g('ip').value=d.ips.join('\n');render()};
+  const d=await (await fetch('/api/admin?date='+day,{cache:'no-store'})).json();data=d;g('st').value=d.students.join('\n');g('ip').value=d.ips.join('\n');g('ex').value=d.exco.join('\n');render()};
  g('roster').addEventListener('click',onAction);
 }
 

@@ -3,7 +3,7 @@ const validDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
 const csvCell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/"/g, '""').replace(/^([=+\-@])/, "'$1") + '"' : s; };
 
 module.exports = async (req, res) => {
-  const u = L.getUser(req); if (!L.isAdmin(u)) return res.status(401).json({ error: 'auth' });
+  const u = L.getUser(req); if (!(await L.isAdmin(u))) return res.status(401).json({ error: 'auth' });
 
   if (req.method === 'POST') {
     const b = await L.body(req);
@@ -20,6 +20,7 @@ module.exports = async (req, res) => {
     }
     if (b.students) await L.r('SET', 'cfg:students', JSON.stringify(clean(b.students)));
     if (b.ips) await L.r('SET', 'cfg:ips', JSON.stringify(clean(b.ips)));
+    if (b.exco) await L.r('SET', 'cfg:exco', JSON.stringify(clean(b.exco).filter((e) => e.includes('@'))));
     return res.json({ ok: true });
   }
 
@@ -37,6 +38,6 @@ module.exports = async (req, res) => {
 
   res.json({
     day, today: L.dayKey(), roster: list,
-    students: await L.getJson('cfg:students', []), ips: await L.getJson('cfg:ips', []), myIp: L.clientIp(req),
+    students: await L.getJson('cfg:students', []), exco: await L.getJson('cfg:exco', []), owners: L.owners(), me: u.e, ips: await L.getJson('cfg:ips', []), myIp: L.clientIp(req),
   });
 };

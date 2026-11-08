@@ -1,6 +1,6 @@
 const L = require('./_lib');
 module.exports = async (req, res) => {
-  const u = L.getUser(req); if (!L.isAdmin(u)) return res.status(401).json({ error: 'auth' });
+  const u = L.getUser(req); if (!(await L.isAdmin(u))) return res.status(401).json({ error: 'auth' });
   const now = Date.now(), q = L.winQ(now), w = L.winW(now);
   const qr = (x) => ({ n: x, url: `${L.BASE()}/s?t=${L.qrToken(x)}` });
   const wd = (x) => ({ n: x, words: L.words(x) });
