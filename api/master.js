@@ -9,6 +9,6 @@ module.exports = async (req, res) => {
     now, site: L.SITE(),
     qr: { period: L.W_QR, cur: qr(q), next: qr(q + 1) },
     words: { period: L.W_WORDS, cur: wd(w), next: wd(w + 1) },
-    roster: list.map((s) => ({ email: s.email, name: s.name, present: s.present, expected: s.expected, ts: s.ts || null })),
+    roster: list.map((s) => ({ email: s.email, name: s.name, year: s.year, present: s.present, expected: s.expected, ts: s.ts || null })),
   });
 };

@@ -5,7 +5,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#fff;color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;-webkit-user-select:none;user-select:none;overflow:hidden}
 body.idle{cursor:none}
-.page{height:100vh;display:grid;grid-template-columns:min(44vw,74vh) 1fr;grid-template-rows:auto 1fr;column-gap:4vw;padding:4vh 4vw 3vh}
+.page{height:100vh;display:grid;grid-template-columns:min(44vw,74vh) minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:4vw;padding:4vh 4vw 3vh}
 h1{grid-column:1/-1;margin:0 0 3vh;font-size:6.2vh;font-weight:700;letter-spacing:-.01em;line-height:1.05}
 .left{display:flex;flex-direction:column;min-height:0}
 .label{font-size:3.2vh;font-weight:600;margin:0}
@@ -20,18 +20,21 @@ h1{grid-column:1/-1;margin:0 0 3vh;font-size:6.2vh;font-weight:700;letter-spacin
 .ring .left{stroke:var(--blue);stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%}
 .ring.low .left{stroke:var(--no)}
 .words{display:flex;flex-wrap:nowrap;white-space:nowrap;gap:0 .45em;font-size:7.4vh;min-width:0;font-weight:700;color:var(--blue);line-height:1.1;letter-spacing:.01em}
-.right{min-height:0;display:flex;flex-direction:column;border-left:2px solid var(--line);padding-left:4vw}
+.right{min-height:0;min-width:0;display:flex;flex-direction:column;border-left:2px solid var(--line);padding-left:4vw}
 .rhead{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 2vh}
 .rhead h2{margin:0;font-size:3.2vh;font-weight:600}
 .count{font-size:3.2vh;color:var(--sub)}
 .count b{color:var(--ok);font-weight:700}
-#list{flex:1;min-height:0;display:grid;grid-auto-flow:column;gap:1vh 1.4vw;align-content:start;list-style:none;margin:0;padding:0}
-#list li{display:flex;align-items:center;gap:.6em;min-width:0;border-radius:.45em;padding:0 .6em;font-weight:600}
-#list li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#list li svg{width:1em;height:1em;flex:none}
-#list li.yes{background:var(--okbg);color:var(--ok)}
-#list li.no{background:var(--nobg);color:var(--no)}
-#list li.fresh{animation:pop 1.2s ease-out}
+#list{flex:1;min-height:0;min-width:0;width:100%;column-gap:1.4vw;column-fill:auto;overflow:hidden}
+.gh{font-size:max(.62em,1.7vh);font-weight:600;color:var(--sub);padding:.55em 0 .35em;border-top:1px solid var(--line);break-after:avoid}
+.grp:first-child .gh{border-top:0;padding-top:0}
+.pair{break-inside:avoid}
+.it{display:flex;align-items:center;gap:.6em;min-width:0;height:1.9em;margin:0 0 .3em;border-radius:.45em;padding:0 .6em;font-weight:600;break-inside:avoid}
+.it span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it svg{width:1em;height:1em;flex:none}
+.it.yes{background:var(--okbg);color:var(--ok)}
+.it.no{background:var(--nobg);color:var(--no)}
+.it.fresh{animation:pop 1.2s ease-out}
 @keyframes pop{0%{box-shadow:0 0 0 0 rgba(14,112,14,.55)}100%{box-shadow:0 0 0 1.4vh rgba(14,112,14,0)}}
 .empty{color:var(--sub);font-size:2.6vh;line-height:1.4}
 #toast{position:fixed;left:50%;bottom:4vh;transform:translate(-50%,calc(100% + 6vh));visibility:hidden;background:var(--ok);color:#fff;font-size:3.2vh;font-weight:600;padding:1.8vh 3vh;border-radius:1.4vh;box-shadow:0 1vh 4vh rgba(0,0,0,.25);transition:transform .35s ease;white-space:nowrap}
@@ -39,7 +42,7 @@ h1{grid-column:1/-1;margin:0 0 3vh;font-size:6.2vh;font-weight:700;letter-spacin
 #stale{position:fixed;right:2vw;bottom:2vh;font-size:2vh;color:var(--no);display:none}
 .gate{grid-column:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:2vh;font-size:2.6vh}
 .gate a{background:var(--blue);color:#fff;text-decoration:none;font-weight:600;padding:1.6vh 3vh;border-radius:1vh}
-@media(prefers-reduced-motion:reduce){#list li.fresh{animation:none}#toast{transition:none}}
+@media(prefers-reduced-motion:reduce){.it.fresh{animation:none}#toast{transition:none}}
 </style></head><body>
 <div class="page" id="page">
  <h1>Robotics Club Attendance</h1>
@@ -54,7 +57,7 @@ h1{grid-column:1/-1;margin:0 0 3vh;font-size:6.2vh;font-weight:700;letter-spacin
  </section>
  <section class="right">
   <div class="rhead"><h2>Students</h2><div class="count" id="count"></div></div>
-  <ul id="list"></ul>
+  <div id="list"></div>
  </section>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -99,22 +102,29 @@ function frame(){
 
 const icon={yes:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.5 8.2l2.3 2.3 4.7-5" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
  no:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'};
-const meas=document.createElement('canvas').getContext('2d');
-function layoutList(names){
- const list=$('list'),H=list.clientHeight,W=list.clientWidth,n=names.length;
- meas.font='600 100px '+getComputedStyle(document.body).fontFamily;
- const longest=Math.max(meas.measureText('Mmmmmmm').width,...names.map(x=>meas.measureText(x).width))/100;
- let best={cols:1,rows:n,size:0,itemH:0};
- for(let cols=1;cols<=5;cols++){
-  const rows=Math.ceil(Math.max(n,1)/cols),gap=window.innerHeight*0.01;
-  const itemH=(H-gap*(rows-1))/rows,colW=(W-(cols-1)*window.innerWidth*0.014)/cols;
-  const font=Math.min(itemH*0.55,colW/(longest+2.9),window.innerHeight*0.036);
-  if(font>best.size+0.5)best={cols,rows,size:font,itemH:Math.min(itemH,font*2.1)};
- }
- list.style.gridTemplateRows=`repeat(${best.rows},${best.itemH}px)`;
- list.style.fontSize=best.size+'px';
+function fits(list){
+ if(list.scrollWidth>list.clientWidth+1||list.scrollHeight>list.clientHeight+1)return false;
+ for(const sp of list.querySelectorAll('.it span'))if(sp.scrollWidth>sp.clientWidth+1)return false;
+ return true;
 }
-let lastRoster=[];
+function fitList(){
+ const list=$('list'),max=window.innerHeight*0.036;
+ let best={cols:1,size:8};
+ for(let cols=1;cols<=5;cols++){
+  list.style.columnCount=cols;
+  let lo=8,hi=max;
+  list.style.fontSize=lo+'px';if(!fits(list))continue;
+  for(let i=0;i<9;i++){const mid=(lo+hi)/2;list.style.fontSize=mid+'px';if(fits(list))lo=mid;else hi=mid}
+  if(lo>best.size+0.5)best={cols,size:lo};
+ }
+ list.style.columnCount=best.cols;list.style.fontSize=best.size+'px';
+}
+let lastRoster=[],shape='',paint='';
+function groupsOf(roster){
+ const g=new Map();
+ for(const s of roster){const k=s.year?'Year '+s.year:'Others';if(!g.has(k))g.set(k,[]);g.get(k).push(s)}
+ return [...g.entries()];
+}
 function renderRoster(roster){
  lastRoster=roster;
  const fresh=[];
@@ -123,9 +133,16 @@ function renderRoster(roster){
  const exp=roster.filter(s=>s.expected),here=exp.filter(s=>s.present).length;
  $('count').innerHTML=exp.length?`<b>${here}</b> of ${exp.length} checked in`:`<b>${roster.length}</b> checked in`;
  const list=$('list');
- if(!roster.length){list.innerHTML='<li class="empty">Add the expected students in the admin panel to see them here.</li>';list.style.gridTemplateRows='';return}
- list.innerHTML=roster.map(s=>`<li class="${s.present?'yes':'no'}${fresh.some(f=>f.email===s.email)?' fresh':''}">${s.present?icon.yes:icon.no}<span>${esc(s.name)}</span></li>`).join('');
- layoutList(roster.map(s=>s.name));
+ if(!roster.length){list.innerHTML='<p class="empty">Add the expected students in the admin panel to see them here.</p>';shape=paint='';return}
+ const newShape=JSON.stringify(roster.map(s=>[s.email,s.name,s.year]));
+ const newPaint=newShape+JSON.stringify(roster.map(s=>s.present));
+ if(newPaint!==paint||fresh.length){
+  const item=s=>`<div class="it ${s.present?'yes':'no'}${fresh.some(f=>f.email===s.email)?' fresh':''}">${s.present?icon.yes:icon.no}<span>${esc(s.name)}</span></div>`;
+  list.innerHTML=groupsOf(roster).map(([label,ss])=>`<div class="grp"><div class="pair"><div class="gh">${esc(label)}</div>${item(ss[0])}</div>${ss.slice(1).map(item).join('')}</div>`).join('');
+  paint=newPaint;
+  if(newShape!==shape){shape=newShape;fitList()}
+ }
+ else if(!fits(list))fitList();
  fresh.sort((a,b)=>a.ts-b.ts).forEach(s=>toastQ.push(s));pump();
 }
 const toastQ=[];let toasting=false;
@@ -158,9 +175,10 @@ async function poll(){
 let idle;
 addEventListener('mousemove',()=>{document.body.classList.remove('idle');clearTimeout(idle);idle=setTimeout(()=>document.body.classList.add('idle'),3000)});
 addEventListener('click',()=>{const el=document.documentElement;if(!document.fullscreenElement&&el.requestFullscreen)el.requestFullscreen().catch(()=>{})});
-addEventListener('resize',()=>{sizeQr();fitWords();if(lastRoster.length)layoutList(lastRoster.map(s=>s.name))});
+addEventListener('resize',()=>{sizeQr();fitWords();if(lastRoster.length)fitList()});
 let lock=null;
 async function wake(){try{if('wakeLock' in navigator&&!lock){lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null})}}catch{}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake()});
+if(document.fonts)document.fonts.ready.then(()=>{sizeQr();fitWords();if(lastRoster.length)fitList()});
 wake();poll();requestAnimationFrame(frame);
 </script></body></html>

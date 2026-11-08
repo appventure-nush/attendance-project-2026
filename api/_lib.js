@@ -113,24 +113,33 @@ const body = async (req) => (typeof req.body === 'object' && req.body) || JSON.p
 const hashToObj = (a) => { const o = {}; for (let i = 0; i < (a || []).length; i += 2) o[a[i]] = a[i + 1]; return o; };
 const fallbackName = (email) => email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+const thisYear = () => +new Intl.DateTimeFormat('en-CA', { timeZone: process.env.TZ_NAME || 'Asia/Singapore', year: 'numeric' }).format(new Date());
+function yearOf(email) {
+  const m = String(email).split('@')[0].match(/^h(\d{2})\d+$/i);
+  if (!m) return null;
+  const level = thisYear() - (2000 + +m[1]) + 1;
+  return level >= 1 && level <= 12 ? level : null;
+}
+
 async function roster(day) {
   const att = hashToObj(await r('HGETALL', 'att:' + day));
   const names = hashToObj(await r('HGETALL', 'names'));
   const expected = await getJson('cfg:students', []);
   const list = [], seen = new Set();
+  const nameFor = (email, rec) => (rec && rec.name) || names[email] || fallbackName(email);
   for (const email of expected) {
     seen.add(email);
     const rec = att[email] ? JSON.parse(att[email]) : null;
-    list.push({ email, name: (rec && rec.name) || names[email] || fallbackName(email), expected: true, present: !!rec, ...(rec ? { ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] } : {}) });
+    list.push({ email, name: nameFor(email, rec), year: yearOf(email), expected: true, present: !!rec, ...(rec ? { ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] } : {}) });
   }
   for (const [email, v] of Object.entries(att)) {
     if (seen.has(email)) continue;
     const rec = JSON.parse(v);
-    list.push({ email, name: rec.name || names[email] || fallbackName(email), expected: false, present: true, ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] });
+    list.push({ email, name: nameFor(email, rec), year: yearOf(email), expected: false, present: true, ts: rec.ts, method: rec.method, ip: rec.ip, flags: rec.flags || [] });
   }
-  list.sort((a, b) => a.name.localeCompare(b.name));
+  list.sort((a, b) => (a.year ?? 99) - (b.year ?? 99) || a.name.localeCompare(b.name));
   return list;
 }
 
 module.exports = { r, BASE, SITE, W_QR, W_WORDS, winQ, winW, qrToken, words, validToken, validWords, parseCookies, setCookie, sign, unsign,
-  getUser, isAdmin, clientIp, ipAllowed, dayKey, getJson, body, roster, fallbackName, crypto };
+  getUser, isAdmin, clientIp, ipAllowed, dayKey, getJson, body, roster, fallbackName, yearOf, crypto };
