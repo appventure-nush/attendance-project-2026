@@ -90,9 +90,17 @@ function codeView(me){
 (async()=>{
  const me=await fetch('/api/me').then(r=>r.json());
  if(!me.email){return $(`<div class="card center"><h1>Robotics Club</h1><p class="sub">Sign in with your school Microsoft account to take attendance.</p><a class="btn" href="/api/auth/login?return=${encodeURIComponent(location.pathname+location.search)}">Sign in with Microsoft</a></div>`)}
- if(tokenParam){const r=await post({token:tokenParam});if(r.ok)return done(me,r);
+ const start=async()=>{
+  if(tokenParam){const r=await post({token:tokenParam});if(r.ok)return done(me,r);
    if(r.reason==='network')return $(hdr(me)+`<div class="card center"><h1>Wrong network</h1><p class="sub">${MSG.network}</p></div>`);
-   return scanView(me,'That link expired. Scan the live QR code on the projector.')}
- mobile?scanView(me):codeView(me);
+   return scanView(me,'That code changed while you were checking in. Scan the live QR code on the projector.')}
+  mobile?scanView(me):codeView(me);
+ };
+ if(me.onList===false){
+  $(hdr(me)+`<div class="card center"><div class="warn" aria-hidden="true">!</div><h1>Are you sure you're part of the Robotics Club?</h1><p class="sub">${esc(me.email)} isn't on the Robotics Club list. If you're in the club, check in anyway and let the teacher in charge know.</p><button class="btn" id="yes">Yes, check me in</button><a class="btn ghost" href="/api/logout">Use a different account</a></div>`);
+  document.getElementById('yes').onclick=start;
+  return;
+ }
+ start();
 })();
 </script></body></html>

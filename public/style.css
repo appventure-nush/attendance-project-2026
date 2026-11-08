@@ -26,3 +26,4 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:8px 6px;b
 textarea{width:100%;min-height:150px;border:1px solid var(--line);border-radius:8px;padding:8px;font:13px monospace}
 .flag{color:var(--bad);font-size:12px}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+.warn{width:56px;height:56px;margin:4px auto 14px;border-radius:50%;background:#fff4ce;color:#8a5a00;display:grid;place-items:center;font:700 30px "Segoe UI",system-ui,sans-serif}

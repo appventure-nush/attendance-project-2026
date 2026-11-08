@@ -115,7 +115,7 @@ const fallbackName = (email) => email.split('@')[0].replace(/[._-]+/g, ' ').repl
 
 const thisYear = () => +new Intl.DateTimeFormat('en-CA', { timeZone: process.env.TZ_NAME || 'Asia/Singapore', year: 'numeric' }).format(new Date());
 function yearOf(email) {
-  const m = String(email).split('@')[0].match(/^h(\d{2})\d+$/i);
+  const m = String(email).split('@')[0].match(/^h(\d{2})[a-z0-9]+$/i);
   if (!m) return null;
   const level = thisYear() - (2000 + +m[1]) + 1;
   return level >= 1 && level <= 12 ? level : null;
